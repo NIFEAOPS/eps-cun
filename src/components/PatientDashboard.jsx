@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { createAppointment, getAppointments } from '../services/appointmentsService';
 import { getMedicationInventory } from '../services/medicationsService';
@@ -9,6 +9,24 @@ const initialAppointmentForm = {
   start: '',
   end: '',
   reason: '',
+};
+
+const resolveStatusTone = (value = '') => {
+  const normalized = String(value).toLowerCase();
+
+  if (normalized.includes('critical') || normalized.includes('cancel') || normalized.includes('error')) {
+    return 'danger';
+  }
+
+  if (normalized.includes('booked') || normalized.includes('pending') || normalized.includes('active')) {
+    return 'warning';
+  }
+
+  if (normalized.includes('complete') || normalized.includes('accepted') || normalized.includes('dispensed')) {
+    return 'success';
+  }
+
+  return 'neutral';
 };
 
 function PatientDashboard({ session, onLogout }) {
@@ -25,6 +43,16 @@ function PatientDashboard({ session, onLogout }) {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState('');
+
+  const medicationAlerts = useMemo(
+    () =>
+      medications.filter(
+        (item) => Number(item.stock) <= 20 || String(item.status).toLowerCase().includes('critical'),
+      ).length,
+    [medications],
+  );
+
+  const nextAppointment = appointments[0]?.startLabel ?? 'Sin agenda';
 
   useEffect(() => {
     let ignore = false;
@@ -108,18 +136,41 @@ function PatientDashboard({ session, onLogout }) {
 
   return (
     <main className="screen-shell">
-      <header className="screen-header">
+      <header className="hero-strip">
         <div>
           <p className="eyebrow">Paciente</p>
-          <h1>{session.user.fullName}</h1>
-          <p className="subtitle">ID: {session.user.id}</p>
+          <h1>Portal de continuidad asistencial</h1>
+          <p className="subtitle">
+            {session.user.fullName} | ID: {session.user.id}
+          </p>
         </div>
-        <button className="secondary" onClick={onLogout}>
-          Cerrar sesion
-        </button>
+        <div className="top-actions">
+          <button className="secondary" onClick={onLogout}>
+            Cerrar sesion
+          </button>
+        </div>
       </header>
 
-      <section className="panel-grid">
+      <section className="metrics-grid">
+        <article className="stat-card">
+          <p className="stat-label">Citas activas</p>
+          <p className="stat-value">{appointments.length}</p>
+        </article>
+        <article className="stat-card">
+          <p className="stat-label">Medicamentos monitoreados</p>
+          <p className="stat-value">{medications.length}</p>
+        </article>
+        <article className="stat-card">
+          <p className="stat-label">Alertas de medicacion</p>
+          <p className="stat-value">{medicationAlerts}</p>
+        </article>
+        <article className="stat-card">
+          <p className="stat-label">Proxima cita</p>
+          <p className="stat-value stat-value-small">{nextAppointment}</p>
+        </article>
+      </section>
+
+      <section className="panel-grid stagger-grid">
         <article className="panel-card">
           <h2>Appointments (FHIR Appointment)</h2>
           {appointmentsLoading && <p className="message">Cargando citas...</p>}
@@ -131,9 +182,14 @@ function PatientDashboard({ session, onLogout }) {
             {appointments.map((appointment) => (
               <li key={appointment.id}>
                 <p className="title">{appointment.description}</p>
-                <p className="meta">
-                  {appointment.startLabel} | {appointment.practitionerName} | estado: {appointment.status}
-                </p>
+                <div className="meta-row">
+                  <p className="meta">
+                    {appointment.startLabel} | {appointment.practitionerName}
+                  </p>
+                  <span className={`status-pill ${resolveStatusTone(appointment.status)}`}>
+                    {appointment.status}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
@@ -150,18 +206,21 @@ function PatientDashboard({ session, onLogout }) {
             {medications.map((medication) => (
               <li key={medication.id}>
                 <p className="title">{medication.name}</p>
-                <p className="meta">
-                  Stock: {medication.stock} | estado: {medication.status}
-                </p>
+                <div className="meta-row">
+                  <p className="meta">Stock: {medication.stock}</p>
+                  <span className={`status-pill ${resolveStatusTone(medication.status)}`}>
+                    {medication.status}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
         </article>
       </section>
 
-      <section className="panel-card">
+      <section className="panel-card elevated">
         <h2>Nueva cita medica</h2>
-        <form className="inline-form" onSubmit={onCreateAppointment}>
+        <form className="inline-form appointment-form" onSubmit={onCreateAppointment}>
           <label>
             Profesional
             <input
@@ -200,7 +259,7 @@ function PatientDashboard({ session, onLogout }) {
               required
             />
           </label>
-          <label>
+          <label className="span-2">
             Motivo
             <input name="reason" value={formState.reason} onChange={onChangeField} required />
           </label>

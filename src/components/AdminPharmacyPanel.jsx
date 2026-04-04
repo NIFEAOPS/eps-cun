@@ -5,6 +5,24 @@ import { getMedicationInventory, simulateGs1Scan } from '../services/medications
 
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
 
+const resolveStatusTone = (value = '') => {
+  const normalized = String(value).toLowerCase();
+
+  if (normalized.includes('critical') || normalized.includes('cancel') || normalized.includes('error')) {
+    return 'danger';
+  }
+
+  if (normalized.includes('booked') || normalized.includes('pending') || normalized.includes('active')) {
+    return 'warning';
+  }
+
+  if (normalized.includes('complete') || normalized.includes('accepted') || normalized.includes('dispensed')) {
+    return 'success';
+  }
+
+  return 'neutral';
+};
+
 function AdminPharmacyPanel({ session, onLogout }) {
   const [inventory, setInventory] = useState([]);
   const [appointmentsQueue, setAppointmentsQueue] = useState([]);
@@ -69,6 +87,11 @@ function AdminPharmacyPanel({ session, onLogout }) {
     [inventory],
   );
 
+  const totalStock = useMemo(
+    () => inventory.reduce((total, item) => total + Number(item.stock || 0), 0),
+    [inventory],
+  );
+
   const executeScan = async (medicationId) => {
     if (!medicationId) {
       setScanError('Debes indicar un ID de medicamento para escaneo GS1.');
@@ -109,7 +132,7 @@ function AdminPharmacyPanel({ session, onLogout }) {
 
   return (
     <main className="screen-shell">
-      <header className="screen-header">
+      <header className="hero-strip">
         <div>
           <p className="eyebrow">Admin Farmacia</p>
           <h1>Pharmacy Command Center</h1>
@@ -117,12 +140,33 @@ function AdminPharmacyPanel({ session, onLogout }) {
             Operador: {session.user.fullName} | Rol: {session.user.role}
           </p>
         </div>
-        <button className="secondary" onClick={onLogout}>
-          Cerrar sesion
-        </button>
+        <div className="top-actions">
+          <button className="secondary" onClick={onLogout}>
+            Cerrar sesion
+          </button>
+        </div>
       </header>
 
-      <section className="panel-grid admin-grid">
+      <section className="metrics-grid">
+        <article className="stat-card">
+          <p className="stat-label">Productos en inventario</p>
+          <p className="stat-value">{inventory.length}</p>
+        </article>
+        <article className="stat-card">
+          <p className="stat-label">Stock total</p>
+          <p className="stat-value">{totalStock}</p>
+        </article>
+        <article className="stat-card">
+          <p className="stat-label">Alertas criticas</p>
+          <p className="stat-value">{criticalStockCount}</p>
+        </article>
+        <article className="stat-card">
+          <p className="stat-label">Citas hoy</p>
+          <p className="stat-value">{appointmentsQueue.length}</p>
+        </article>
+      </section>
+
+      <section className="panel-grid admin-grid stagger-grid">
         <article className="panel-card">
           <h2>Inventario y trazabilidad</h2>
           <p className="kpi">Alertas de stock critico: {criticalStockCount}</p>
@@ -145,11 +189,20 @@ function AdminPharmacyPanel({ session, onLogout }) {
               </thead>
               <tbody>
                 {inventory.map((item) => (
-                  <tr key={item.id}>
+                  <tr
+                    key={item.id}
+                    className={
+                      Number(item.stock) <= 20 || String(item.status).toLowerCase().includes('critical')
+                        ? 'critical-row'
+                        : ''
+                    }
+                  >
                     <td>{item.id}</td>
                     <td>{item.name}</td>
                     <td>{item.stock}</td>
-                    <td>{item.status}</td>
+                    <td>
+                      <span className={`status-pill ${resolveStatusTone(item.status)}`}>{item.status}</span>
+                    </td>
                     <td>
                       <button
                         type="button"
@@ -179,9 +232,14 @@ function AdminPharmacyPanel({ session, onLogout }) {
             {appointmentsQueue.map((appointment) => (
               <li key={appointment.id}>
                 <p className="title">{appointment.patientName}</p>
-                <p className="meta">
-                  {appointment.startLabel} | {appointment.description}
-                </p>
+                <div className="meta-row">
+                  <p className="meta">
+                    {appointment.startLabel} | {appointment.description}
+                  </p>
+                  <span className={`status-pill ${resolveStatusTone(appointment.status)}`}>
+                    {appointment.status}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
