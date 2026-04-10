@@ -127,7 +127,7 @@ function LoginPage({ onLogin }) {
           </section>
         </div>
 
-        <p className="login-credit">Desarrollado por Nicolas Alfaro y Nicol Lopez</p>
+        <p className="login-credit">Desarrollado por Nicolas Alfaro , Dylan Guevara y Nicol Lopez</p>
       </div>
     </main>
   );
